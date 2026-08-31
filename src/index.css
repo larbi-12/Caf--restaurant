@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@theme {
+  --color-noir: #14110f;
+  --color-charcoal: #211c18;
+  --color-cream: #f7f1e6;
+  --color-ivory: #fbf8f2;
+  --color-beige: #e7dcc4;
+  --color-sable: #cdb98d;
+  --color-terracotta: #8a5a3c;
+  --color-gold: #b08a4e;
+
+  --font-serif: "Cormorant Garamond", "Times New Roman", serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ivory);
+  color: var(--color-noir);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+::selection {
+  background: var(--color-gold);
+  color: var(--color-ivory);
+}
+
+.eyebrow {
+  font-family: var(--font-sans);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+a, button {
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Admin dashboard form controls */
+.input {
+  width: 100%;
+  border: 1px solid #d4d4d4;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  outline: none;
+  background: #fff;
+  color: #171717;
+  transition: border-color 0.2s;
+  font-family: var(--font-sans);
+}
+.input:focus {
+  border-color: #171717;
+}
