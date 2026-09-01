@@ -32,7 +32,7 @@ create or replace function is_admin()
 returns boolean as $$
   select exists (
     select 1 from admin_users
-    where email = (auth.jwt() ->> 'email')
+    where lower(email) = lower(auth.jwt() ->> 'email')
   );
 $$ language sql stable security definer;
 

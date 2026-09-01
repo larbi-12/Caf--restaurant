@@ -2,7 +2,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 export default function ProtectedRoute({ children }) {
-  const { user, isAdmin, loading, isConfigured, isClerkConfigured, isSupabaseConfigured } = useAuth();
+  const { user, isAdmin, loading, isConfigured, isSupabaseConfigured } = useAuth();
   const location = useLocation();
 
   if (!isConfigured) {
@@ -12,8 +12,8 @@ export default function ProtectedRoute({ children }) {
           <span className="eyebrow text-gold">Configuration requise</span>
           <h1 className="text-2xl font-serif">L'administration n'est pas configurée</h1>
           <p className="text-beige/70 text-sm">
-            {!isClerkConfigured && "Ajoutez VITE_CLERK_PUBLISHABLE_KEY dans .env.local pour activer l'authentification. "}
-            {!isSupabaseConfigured && "Ajoutez VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY dans .env.local pour activer la base de données. "}
+            {!isSupabaseConfigured &&
+              "Ajoutez VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY dans .env.local pour activer l'authentification et la base de données. "}
             Voir le README.
           </p>
         </div>

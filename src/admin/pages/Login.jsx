@@ -1,25 +1,7 @@
+import { useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { SignIn } from "@clerk/clerk-react";
 import { useAuth } from "../../context/AuthContext";
 import { useRestaurantSettings } from "../../hooks/useRestaurantSettings";
-
-const clerkAppearance = {
-  variables: {
-    colorPrimary: "#b08a4e",
-    colorBackground: "#211c18",
-    colorText: "#fbf8f2",
-    colorTextSecondary: "#e7dcc4",
-    colorInputBackground: "#14110f",
-    colorInputText: "#fbf8f2",
-    borderRadius: "0px",
-    fontFamily: "'Inter', system-ui, sans-serif",
-  },
-  elements: {
-    card: "shadow-none border border-white/10",
-    headerTitle: "font-serif",
-    footerActionLink: "text-[#b08a4e] hover:text-[#e7dcc4]",
-  },
-};
 
 function Shell({ settings, children }) {
   return (
@@ -39,9 +21,14 @@ function Shell({ settings, children }) {
 }
 
 export default function Login() {
-  const { user, isAdmin, loading, isConfigured, isClerkConfigured, isSupabaseConfigured, signOut } = useAuth();
+  const { user, isAdmin, loading, isConfigured, isSupabaseConfigured, signIn, signOut } = useAuth();
   const { settings } = useRestaurantSettings();
   const location = useLocation();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState(null);
 
   // Authorized admin, fully resolved: proceed to the dashboard (or wherever they
   // were headed before being bounced to login).
@@ -56,7 +43,6 @@ export default function Login() {
         <div className="w-full flex flex-col gap-5 bg-charcoal p-8 border border-ivory/10">
           <h1 className="text-xl text-ivory font-serif">Admin sign-in</h1>
           <p className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 px-3 py-2 text-left">
-            {!isClerkConfigured && "VITE_CLERK_PUBLISHABLE_KEY is not set. "}
             {!isSupabaseConfigured && "VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are not set. "}
             See the README to configure .env.local.
           </p>
@@ -65,7 +51,7 @@ export default function Login() {
     );
   }
 
-  // Still resolving Clerk session / admin_users lookup.
+  // Still resolving the session / admin_users lookup.
   if (loading) {
     return (
       <Shell settings={settings}>
@@ -74,9 +60,9 @@ export default function Login() {
     );
   }
 
-  // Signed in with Clerk, but this email is not in admin_users. Stay right here
-  // on /admin/login — never bounce to the public homepage — and keep the Clerk
-  // session alive until the user explicitly chooses to sign out.
+  // Signed in, but this email is not in admin_users. Stay right here on
+  // /admin/login — never bounce to the public homepage — and keep the session
+  // alive until the user explicitly chooses to sign out.
   if (user && !isAdmin) {
     return (
       <Shell settings={settings}>
@@ -97,11 +83,67 @@ export default function Login() {
     );
   }
 
-  // Not signed in at all: show Clerk's sign-in UI, staying on this same route
-  // after a successful authentication so the admin check above can run.
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setFormError(null);
+    setSubmitting(true);
+    const { error } = await signIn(email, password);
+    setSubmitting(false);
+    if (error) {
+      setFormError(error);
+      return;
+    }
+    // On success the AuthProvider picks up the new session; this component
+    // re-renders and the admin check / redirect above takes over.
+  };
+
+  // Not signed in: email + password form (Supabase Auth).
   return (
     <Shell settings={settings}>
-      <SignIn routing="hash" appearance={clerkAppearance} fallbackRedirectUrl="/admin/login" forceRedirectUrl="/admin/login" />
+      <form
+        onSubmit={handleSubmit}
+        className="w-full flex flex-col gap-4 bg-charcoal p-8 border border-ivory/10 text-left"
+      >
+        <h1 className="text-xl text-ivory font-serif text-center">Admin sign-in</h1>
+
+        {formError && (
+          <p className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 px-3 py-2">
+            {formError}
+          </p>
+        )}
+
+        <label className="flex flex-col gap-1 text-xs text-beige/70">
+          Email
+          <input
+            type="email"
+            required
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="bg-noir border border-ivory/15 px-3 py-2 text-sm text-ivory outline-none focus:border-gold"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs text-beige/70">
+          Password
+          <input
+            type="password"
+            required
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="bg-noir border border-ivory/15 px-3 py-2 text-sm text-ivory outline-none focus:border-gold"
+          />
+        </label>
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="mt-2 inline-flex items-center justify-center gap-2 bg-ivory text-noir px-6 py-3 text-sm font-medium hover:bg-gold transition-colors disabled:opacity-50"
+        >
+          {submitting ? "Signing in..." : "Sign in"}
+        </button>
+      </form>
     </Shell>
   );
 }

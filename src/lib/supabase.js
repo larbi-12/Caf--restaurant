@@ -12,23 +12,19 @@ if (!isSupabaseConfigured) {
 }
 
 /**
- * Auth is handled entirely by Clerk (see src/context/AuthContext.jsx) — Supabase
- * never issues its own session. Instead, Supabase is configured as a "Third-Party
- * Auth" consumer of Clerk (Dashboard → Authentication → Sign In / Providers →
- * Third Party Auth), so it can verify Clerk's JWT directly via Clerk's public
- * JWKS. This `accessToken` callback hands supabase-js the current Clerk session
- * token (if any) on every request; RLS policies then read admin identity via
- * auth.jwt() exactly as before. When signed out, this resolves to null and
- * supabase-js falls back to the anon key — public pages are unaffected.
+ * Auth is handled by Supabase Auth (email + password) — see
+ * src/context/AuthContext.jsx. supabase-js persists the session in localStorage
+ * and attaches its JWT to every request automatically, so RLS policies read the
+ * signed-in identity via auth.jwt() ->> 'email' (see supabase/schema.sql,
+ * is_admin()). When signed out, requests use the anon key and only public data
+ * is reachable — public pages are unaffected.
  */
 export const supabase = isSupabaseConfigured
   ? createClient(url, anonKey, {
-      accessToken: async () => {
-        try {
-          return (await window.Clerk?.session?.getToken()) ?? null;
-        } catch {
-          return null;
-        }
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
       },
     })
   : null;

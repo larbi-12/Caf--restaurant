@@ -1,11 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { ClerkProvider, useUser, useClerk, useAuth as useClerkAuth } from "@clerk/clerk-react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 
 const AuthContext = createContext(null);
-
-const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-const isClerkConfigured = Boolean(CLERK_PUBLISHABLE_KEY);
 
 const baseValue = {
   user: null,
@@ -13,74 +9,110 @@ const baseValue = {
   isAdmin: false,
   loading: false,
   isConfigured: false,
-  isClerkConfigured,
   isSupabaseConfigured,
+  signIn: async () => ({ error: "not_configured" }),
   signOut: async () => {},
 };
 
-/** Used when Clerk isn't configured yet — never touches Clerk hooks/ClerkProvider. */
+/** Used when Supabase env vars are missing — `supabase` is null, never touched. */
 function UnconfiguredAuthProvider({ children }) {
   return <AuthContext.Provider value={baseValue}>{children}</AuthContext.Provider>;
 }
 
-function ClerkBridgeAuthProvider({ children }) {
-  const { isLoaded: clerkLoaded, isSignedIn } = useClerkAuth();
-  const { user: clerkUser } = useUser();
-  const { signOut: clerkSignOut } = useClerk();
-
+function SupabaseAuthProvider({ children }) {
+  const [session, setSession] = useState(null);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminChecked, setAdminChecked] = useState(false);
 
-  const email = clerkUser?.primaryEmailAddress?.emailAddress || null;
+  const email = session?.user?.email || null;
+
+  // Load the persisted session once, then stay in sync with sign-in / sign-out /
+  // token refresh events.
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      setSession(data.session ?? null);
+      setSessionLoaded(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+      setSession(next ?? null);
+      setSessionLoaded(true);
+    });
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
 
   const checkAdmin = useCallback(async () => {
-    if (!email || !isSupabaseConfigured) {
+    // Being signed in is not sufficient on its own — the email must also be in
+    // the admin_users whitelist. This SELECT is gated by Postgres RLS
+    // (is_admin(), which reads the email from the Supabase session JWT), so it
+    // only returns a row for a genuine admin.
+    const normalizedEmail = email?.trim().toLowerCase() || null;
+    if (!normalizedEmail) {
       setIsAdmin(false);
       setAdminChecked(true);
       return;
     }
-    // Explicit, server-verified authorization check — being signed in with Clerk
-    // is not sufficient on its own. This query only returns a row if Postgres RLS
-    // (is_admin(), driven by the Clerk JWT bridged into Supabase) allows it, i.e.
-    // the signed-in email is actually present in admin_users.
-    const { data } = await supabase.from("admin_users").select("id").eq("email", email).maybeSingle();
-    setIsAdmin(Boolean(data));
+    const { data, error } = await supabase
+      .from("admin_users")
+      .select("id")
+      .eq("email", normalizedEmail)
+      .maybeSingle();
+    if (error) {
+      // e.g. the signed-in email is missing from admin_users, or the Vercel env
+      // vars point at another Supabase project. Surface it instead of silently
+      // treating the user as non-admin.
+      console.warn("[Maison Noor] admin_users lookup failed:", error.message);
+    }
+    setIsAdmin(Boolean(data) && !error);
     setAdminChecked(true);
   }, [email]);
 
   useEffect(() => {
-    if (!clerkLoaded) return;
-    if (!isSignedIn) {
+    if (!sessionLoaded) return;
+    if (!session) {
       setIsAdmin(false);
       setAdminChecked(true);
       return;
     }
     setAdminChecked(false);
     checkAdmin();
-  }, [clerkLoaded, isSignedIn, checkAdmin]);
+  }, [sessionLoaded, session, checkAdmin]);
+
+  const signIn = useCallback(async (emailInput, password) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email: emailInput.trim().toLowerCase(),
+      password,
+    });
+    return { error: error ? error.message : null };
+  }, []);
 
   const signOut = useCallback(async () => {
-    // Explicit redirectUrl so Clerk's own post-sign-out navigation never lands the
-    // user on the public homepage — it returns them to the admin login screen.
-    await clerkSignOut({ redirectUrl: "/admin/login" });
-  }, [clerkSignOut]);
+    await supabase.auth.signOut();
+    setIsAdmin(false);
+    setAdminChecked(true);
+  }, []);
 
-  const loading = !clerkLoaded || (isSignedIn && !adminChecked);
+  const loading = !sessionLoaded || (Boolean(session) && !adminChecked);
 
   const value = {
-    user: isSignedIn
+    user: session
       ? {
           email,
-          fullName: clerkUser?.fullName || email,
-          imageUrl: clerkUser?.imageUrl || null,
+          fullName: session.user?.user_metadata?.full_name || email,
+          imageUrl: session.user?.user_metadata?.avatar_url || null,
         }
       : null,
-    isSignedIn: Boolean(isSignedIn),
+    isSignedIn: Boolean(session),
     isAdmin,
     loading,
-    isConfigured: isClerkConfigured && isSupabaseConfigured,
-    isClerkConfigured,
+    isConfigured: isSupabaseConfigured,
     isSupabaseConfigured,
+    signIn,
     signOut,
   };
 
@@ -88,14 +120,10 @@ function ClerkBridgeAuthProvider({ children }) {
 }
 
 export function AuthProvider({ children }) {
-  if (!isClerkConfigured) {
+  if (!isSupabaseConfigured) {
     return <UnconfiguredAuthProvider>{children}</UnconfiguredAuthProvider>;
   }
-  return (
-    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} signInUrl="/admin/login" signInFallbackRedirectUrl="/admin/login">
-      <ClerkBridgeAuthProvider>{children}</ClerkBridgeAuthProvider>
-    </ClerkProvider>
-  );
+  return <SupabaseAuthProvider>{children}</SupabaseAuthProvider>;
 }
 
 export function useAuth() {

@@ -4,7 +4,7 @@ Site web premium pour un restaurant marocain, avec un dashboard admin pour gére
 
 ### Stack
 
-React · Vite · Tailwind CSS · GSAP · Supabase · Clerk
+React · Vite · Tailwind CSS · GSAP · Supabase
 
 ### Installation
 
@@ -17,7 +17,10 @@ npm run dev
 
 `/admin`
 
-Authentification avec Clerk, données et gestion du contenu avec Supabase.
+Authentification (email + mot de passe) et gestion du contenu avec Supabase.
+
+Créez le compte admin dans Supabase Dashboard → Authentication → Users → Add user,
+puis ajoutez son email dans la table `admin_users` (voir `supabase/seed.sql`).
 
 ### Supabase
 
